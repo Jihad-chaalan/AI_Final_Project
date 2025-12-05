@@ -1,3 +1,5 @@
+from langchain.agents import create_agent
+from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
@@ -159,109 +161,48 @@ def classify_question(state: AgentState):
     label = llm.invoke(prompt).content.strip().lower()
     return {"classification": label}
 
+@tool
+def get_slots_for_weeks(professional_name: str, week_numbers: str) -> str:
+    """Get available appointment slots for a professional for specified weeks.
 
-def get_current_next_week_slots(state: AgentState):
-    """Get available timeslots for current week and next week"""
-    query = state.get("query", "").lower()
-    professional_name = state.get("professional_name")
-    
-    if not professional_name:
-        extraction_prompt = f"""
-            Extract the professional name from the following query.
-            Available professionals: Ali, Malik, Fatima, Sara, Mohamed
-
-            Query: {query}
-
-            Return ONLY the professional name if found, otherwise return "NONE".
-        """
-        professional_name = llm.invoke(extraction_prompt).content.strip()
-    
-    if professional_name and professional_name.upper() != "NONE":
-        # Get current week (1) and next week (2)
-        appointments_info = get_available_slots_for_weeks(professional_name, [1, 2])
-        return {
-            "timeslots": appointments_info,
-            "professional_name": professional_name,
-            "message": appointments_info
-        }
-    
-    return {
-        "timeslots": "No professional name provided.",
-        "message": "No professional name provided. Please specify which professional you'd like to book with."
-    }
+    Args:
+        professional_name: Name of the professional (Ali, Malik, Fatima, Sara, Mohamed)
+        week_numbers: Comma-separated week numbers (e.g., "1,2" for current and next week)
+    """
+    weeks = [int(w.strip()) for w in week_numbers.split(",")]
+    return get_available_slots_for_weeks(professional_name, weeks)
 
 
-def find_professional(state: AgentState):
-    """Ask user for professional search criteria"""
-    return {"human_question": "What are you looking for in a professional? (e.g., location, max fee)"}
+@tool
+def book_appointment_slot(
+        professional_name: str,
+        client_name: str,
+        day_of_week: str,
+        start_time: str,
+        week_number: int = 1
+) -> str:
+    """Book an appointment slot with a professional.
 
-
-def fetch_professionals(state: AgentState):
-    """Fetch professionals based on user criteria"""
-    criteria = state.get("professional_criteria", "").lower()
-    
-    matching = PROFESSIONALS.copy()
-    
-    # Parse criteria for location
-    locations = ["beirut", "byblos", "saida", "tyre"]
-    for loc in locations:
-        if loc in criteria:
-            matching = [p for p in matching if loc in p["location"].lower()]
-            break
-    
-    # Parse criteria for max fee
-    import re
-    fee_match = re.search(r'max\s*fee\s*(\d+)|(\d+)\s*fee|under\s*(\d+)|below\s*(\d+)|less\s*than\s*(\d+)', criteria)
-    if fee_match:
-        max_fee = int(next(g for g in fee_match.groups() if g))
-        matching = [p for p in matching if p["Fee"] <= max_fee]
-    
-    if not matching:
-        result = "No professionals found matching your criteria. Available professionals:\n"
-        for prof in PROFESSIONALS:
-            result += f"- {prof['name']}: {prof['location']}, ${prof['Fee']}\n"
-    else:
-        result = "Matching professionals:\n"
-        for prof in matching:
-            result += f"- {prof['name']}: {prof['location']}, ${prof['Fee']}\n"
-    
-    return {"professional_list": result}
-
-
-def get_specific_week_slots(state: AgentState):
-    """Get available timeslots for a specific week number"""
-    professional_name = state.get("professional_name")
-    week_number = state.get("week_number", 1)
-    
-    if not professional_name:
-        return {"message": "Professional name not set.", "timeslots": ""}
-    
-    appointments_info = get_available_slots_for_weeks(professional_name, [week_number])
-    
-    return {
-        "timeslots": appointments_info,
-        "message": appointments_info
-    }
-
-
-def book_appointment(state: AgentState):
-    """Book an appointment for a client with a professional"""
-    professional_name = state.get("professional_name")
-    client_name = state.get("client_name")
-    day_of_week = state.get("day_of_week")
-    start_time = state.get("start_time")
-    week_number = state.get("week_number", 1)
-
-    if not day_of_week or not start_time:
-        return {"message": "Please provide the day of week and start time for the appointment."}
-
-    professional = next((p for p in PROFESSIONALS if p["name"].lower() == professional_name.lower()), None)
+    Args:
+        professional_name: Name of the professional
+        client_name: Name of the client booking the appointment
+        day_of_week: Day of the week (Monday, Tuesday, etc.)
+        start_time: Start time in HH:MM format (e.g., 09:00)
+        week_number: Week number (1 = current week, 2 = next week, etc.)
+    """
+    professional = next(
+        (p for p in PROFESSIONALS if p["name"].lower() == professional_name.lower()),
+        None
+    )
     if not professional:
-        return {"message": f"Professional {professional_name} not found."}
+        return f"Professional {professional_name} not found."
 
-    client = next((c for c in CLIENTS if c["name"].lower() == client_name.lower()), None)
+    client = next(
+        (c for c in CLIENTS if c["name"].lower() == client_name.lower()),
+        None
+    )
     if not client:
-        return {"message": f"Client {client_name} not found."}
+        return f"Client {client_name} not found."
 
     time_slot = next(
         (slot for slot in PROFESSIONALS_TIMESLOTS
@@ -273,18 +214,18 @@ def book_appointment(state: AgentState):
     )
 
     if not time_slot:
-        return {"message": f"Time slot not available for {professional_name} on {day_of_week} at {start_time}."}
+        return f"Time slot not available for {professional_name} on {day_of_week} at {start_time}."
 
     today = datetime.now()
     current_week_start = today - timedelta(days=today.weekday())
     week_start = current_week_start + timedelta(weeks=week_number - 1)
-    
+
     days_of_week_list = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     target_day_index = days_of_week_list.index(day_of_week.lower())
-    
+
     appointment_date = week_start + timedelta(days=target_day_index)
     date_str = appointment_date.strftime("%Y-%m-%d")
-    
+
     existing_appointment = next(
         (apt for apt in APPOINTMENTS
          if apt["professional_id"] == professional["id"]
@@ -292,10 +233,10 @@ def book_appointment(state: AgentState):
          and apt["start_time"] == start_time),
         None
     )
-    
+
     if existing_appointment:
-        return {"message": f"This slot is already booked for {professional_name} on {date_str} at {start_time}."}
-    
+        return f"This slot is already booked for {professional_name} on {date_str} at {start_time}."
+
     new_appointment = Appointment(
         id=len(APPOINTMENTS) + 1,
         professional_id=professional["id"],
@@ -308,10 +249,177 @@ def book_appointment(state: AgentState):
 
     APPOINTMENTS.append(new_appointment)
 
+    return f"Appointment booked successfully for {client_name} with {professional_name} on {day_of_week}, {date_str} (Week {week_number}) at {start_time}-{time_slot['end_time']}."
+
+def get_current_next_week_slots(state: AgentState):
+    """Get available timeslots for current week and next week using agent"""
+    query = state.get("query", "")
+    professional_name = state.get("professional_name", "")
+
+    prompt = """You are an appointment scheduling assistant.
+    Use the get_slots_for_weeks tool to find available appointment slots.
+    Extract the professional name from the query and get slots for weeks 1 and 2 (current and next week).
+    Available professionals: Ali, Malik, Fatima, Sara, Mohamed
+    Always pass week_numbers as "1,2" for current and next week.
+    """
+
+    agent = create_agent(
+        model=llm,
+        tools=[get_slots_for_weeks],
+        system_prompt=prompt,
+    )
+
+    message = f"Find available slots for {professional_name}" if professional_name else query
+
+    result = agent.invoke({
+        "messages": [("user", message)]
+    })
+
+    response = result["messages"][-1].content
+
+    # Extract professional name if not already set
+    if not professional_name:
+        extraction_prompt = f"""
+            Extract the professional name from: {query}
+            Available professionals: Ali, Malik, Fatima, Sara, Mohamed
+            Return ONLY the name or "NONE".
+        """
+        professional_name = llm.invoke(extraction_prompt).content.strip()
+
     return {
-        "appointment": new_appointment,
-        "message": f"Appointment booked successfully for {client_name} with {professional_name} on {day_of_week}, {date_str} (Week {week_number}) at {start_time}-{time_slot['end_time']}."
+        "timeslots": response,
+        "professional_name": professional_name if professional_name.upper() != "NONE" else None,
+        "message": response
     }
+
+
+def find_professional(state: AgentState):
+    """Ask user for professional search criteria"""
+    return {"human_question": "What are you looking for in a professional? (e.g., location, max fee)"}
+
+@tool
+def search_professionals(location: str = None, max_fee: int = None) -> str:
+    """Search for professionals by location and/or maximum fee.
+    
+    Args:
+        location: City name (Beirut, Byblos, Saida, Tyre)
+        max_fee: Maximum fee in dollars
+    """
+    matching = PROFESSIONALS.copy()
+
+    if location:
+        matching = [p for p in matching if location.lower() in p["location"].lower()]
+
+    if max_fee:
+        matching = [p for p in matching if p["Fee"] <= max_fee]
+
+    if not matching:
+        return "No professionals found matching criteria."
+
+    result = "Matching professionals:\n"
+    for prof in matching:
+        result += f"- {prof['name']}: {prof['location']}, ${prof['Fee']}\n"
+    return result
+
+
+def fetch_professionals(state: AgentState):
+    """Fetch professionals based on user criteria using agent with tool"""
+    criteria = state.get("professional_criteria", "")
+
+    prompt = f"""You are an assistant that helps users find professionals.
+    Use the search_professionals tool to find professionals based on user criteria.
+    Extract location and max_fee from the user's request and pass them to the tool.
+    Professionals:{PROFESSIONALS}
+    """
+
+    agent = create_agent(
+        model=llm,
+        tools=[search_professionals],
+        system_prompt=prompt
+    )
+
+    result = agent.invoke({
+        "messages": [f"Find professionals matching: {criteria}"]
+    })
+
+    return {"professional_list": result["messages"][-1].content}
+
+
+
+def get_specific_week_slots(state: AgentState):
+    """Get available timeslots for a specific week using agent"""
+    professional_name = state.get("professional_name")
+    week_number = state.get("week_number", 1)
+
+    if not professional_name:
+        return {"message": "Professional name not set.", "timeslots": ""}
+
+    prompt = f"""You are an assistant that helps users find professionals.
+    Use the search_professionals tool to find professionals based on user criteria.
+    Extract location and max_fee from the user's request and pass them to the tool.
+    If no specific criteria are provided, call the tool with no parameters to list all professionals.
+    Do NOT ask follow-up questions - use whatever information is available.
+    Professionals:{PROFESSIONALS}
+    """
+
+    agent = create_agent(
+        model=llm,
+        tools=[get_slots_for_weeks],
+        system_prompt=prompt,
+    )
+
+    result = agent.invoke({
+        "messages": [("user", f"Get available slots for {professional_name} for week {week_number}")]
+    })
+
+    response = result["messages"][-1].content
+
+    return {
+        "timeslots": response,
+        "message": response
+    }
+
+
+def book_appointment(state: AgentState):
+    """Book an appointment using agent with tool"""
+    professional_name = state.get("professional_name")
+    client_name = state.get("client_name")
+    day_of_week = state.get("day_of_week")
+    start_time = state.get("start_time")
+    week_number = state.get("week_number", 1)
+
+    if not all([professional_name, client_name, day_of_week, start_time]):
+        return {"message": "Missing booking details. Please provide professional name, day, and time."}
+
+    prompt = """You are an appointment booking assistant.
+    Use the book_appointment_slot tool to book appointments.
+    Extract all required parameters from the user request:
+    - professional_name
+    - client_name
+    - day_of_week (Monday, Tuesday, etc.)
+    - start_time (HH:MM format)
+    - week_number (default 1 for current week)
+    """
+
+    agent = create_agent(
+        model=llm,
+        tools=[book_appointment_slot],
+        system_prompt=prompt,
+    )
+
+    result = agent.invoke({
+        "messages": [(
+            "user",
+            f"Book appointment for {client_name} with {professional_name} on {day_of_week} at {start_time} for week {week_number}"
+        )]
+    })
+
+    response = result["messages"][-1].content
+
+    return {
+        "message": response
+    }
+
 
 
 def format_response(state: AgentState):

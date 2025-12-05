@@ -438,7 +438,7 @@ if __name__ == "__main__":
     
     # Loop for specific week selection
     while True:
-        user_choice = input("\nOptions:\n  - Enter a week number (e.g., 3) to see that week's slots\n  - Type 'book' to book an appointment\n  - Type 'quit' to exit\nYour choice: ").strip().lower()
+        user_choice = input("\nOptions:\n  - Enter a week number (1 is the current week) to see that week's slots\n  - Type 'book' to book an appointment\n  - Type 'quit' to exit\nYour choice: ").strip().lower()
         
         if user_choice == "quit":
             app.update_state(thread_config_1, {"user_action": "quit", "message": "User chose to exit."})
@@ -446,23 +446,55 @@ if __name__ == "__main__":
             print("\nExited.")
             break
         elif user_choice == "book":
-            app.update_state(thread_config_1, {"user_action": "book"})
-            
-            week_num = input("Enter week number for booking: ")
-            day_input = input("Enter day of week (e.g., Monday, Thursday): ")
-            time_input = input("Enter start time (e.g., 09:00, 11:00): ")
-            
-            app.update_state(thread_config_1, {
-                "week_number": int(week_num),
-                "day_of_week": day_input,
-                "start_time": time_input
-            })
-            
-            app.invoke(None, thread_config_1)
-            print("\n" + "=" * 50)
-            print("BOOKING CONFIRMATION")
-            print("=" * 50)
-            print(app.get_state(thread_config_1).values["final_answer"])
+            # Booking loop with confirmation
+            while True:
+                week_num = input("Enter week number for booking: ")
+                day_input = input("Enter day of week (e.g., Monday, Thursday): ")
+                time_input = input("Enter start time (e.g., 09:00, 11:00): ")
+                
+                # Show confirmation prompt
+                print("\n" + "-" * 40)
+                print("APPOINTMENT DETAILS:")
+                print(f"  Week: {week_num}")
+                print(f"  Day: {day_input}")
+                print(f"  Time: {time_input}")
+                print("-" * 40)
+                
+                confirm = input("\nConfirm booking? (yes/no/change_week): ").strip().lower()
+                
+                if confirm == "yes":
+                    app.update_state(thread_config_1, {
+                        "user_action": "book",
+                        "week_number": int(week_num),
+                        "day_of_week": day_input,
+                        "start_time": time_input
+                    })
+                    app.invoke(None, thread_config_1)
+                    print("\n" + "=" * 50)
+                    print("BOOKING CONFIRMATION")
+                    print("=" * 50)
+                    print(app.get_state(thread_config_1).values["final_answer"])
+                    break
+                elif confirm == "change_week":
+                    # Show available weeks and let user pick a different week
+                    new_week = input("Enter new week number to view slots: ")
+                    try:
+                        app.update_state(thread_config_1, {
+                            "user_action": "continue",
+                            "week_number": int(new_week)
+                        })
+                        app.invoke(None, thread_config_1)
+                        print("\n" + "=" * 50)
+                        print(f"AVAILABLE APPOINTMENTS (Week {new_week})")
+                        print("=" * 50)
+                        print(app.get_state(thread_config_1).values["timeslots"])
+                    except ValueError:
+                        print("Invalid week number.")
+                    # Continue the booking loop
+                else:
+                    # User said no, repeat day/time entry
+                    print("\nPlease re-enter appointment details.")
+                    continue
             break
         else:
             # Assume it's a week number
@@ -520,7 +552,7 @@ if __name__ == "__main__":
     
     # Loop for specific week selection
     while True:
-        user_choice = input("\nOptions:\n  - Enter a week number (e.g., 3) to see that week's slots\n  - Type 'book' to book an appointment\n  - Type 'quit' to exit\nYour choice: ").strip().lower()
+        user_choice = input("\nOptions:\n  - Enter a week number (1 is the current week) to see that week's slots\n  - Type 'book' to book an appointment\n  - Type 'quit' to exit\nYour choice: ").strip().lower()
         
         if user_choice == "quit":
             app.update_state(thread_config_2, {"user_action": "quit", "message": "User chose to exit."})
@@ -528,23 +560,55 @@ if __name__ == "__main__":
             print("\nExited.")
             break
         elif user_choice == "book":
-            app.update_state(thread_config_2, {"user_action": "book"})
-            
-            week_num = input("Enter week number for booking: ")
-            day_input = input("Enter day of week (e.g., Monday, Thursday): ")
-            time_input = input("Enter start time (e.g., 09:00, 11:00): ")
-            
-            app.update_state(thread_config_2, {
-                "week_number": int(week_num),
-                "day_of_week": day_input,
-                "start_time": time_input
-            })
-            
-            app.invoke(None, thread_config_2)
-            print("\n" + "=" * 50)
-            print("BOOKING CONFIRMATION")
-            print("=" * 50)
-            print(app.get_state(thread_config_2).values["final_answer"])
+            # Booking loop with confirmation
+            while True:
+                week_num = input("Enter week number for booking: ")
+                day_input = input("Enter day of week (e.g., Monday, Thursday): ")
+                time_input = input("Enter start time (e.g., 09:00, 11:00): ")
+                
+                # Show confirmation prompt
+                print("\n" + "-" * 40)
+                print("APPOINTMENT DETAILS:")
+                print(f"  Week: {week_num}")
+                print(f"  Day: {day_input}")
+                print(f"  Time: {time_input}")
+                print("-" * 40)
+                
+                confirm = input("\nConfirm booking? (yes/no/change_week): ").strip().lower()
+                
+                if confirm == "yes":
+                    app.update_state(thread_config_2, {
+                        "user_action": "book",
+                        "week_number": int(week_num),
+                        "day_of_week": day_input,
+                        "start_time": time_input
+                    })
+                    app.invoke(None, thread_config_2)
+                    print("\n" + "=" * 50)
+                    print("BOOKING CONFIRMATION")
+                    print("=" * 50)
+                    print(app.get_state(thread_config_2).values["final_answer"])
+                    break
+                elif confirm == "change_week":
+                    # Show available weeks and let user pick a different week
+                    new_week = input("Enter new week number to view slots: ")
+                    try:
+                        app.update_state(thread_config_2, {
+                            "user_action": "continue",
+                            "week_number": int(new_week)
+                        })
+                        app.invoke(None, thread_config_2)
+                        print("\n" + "=" * 50)
+                        print(f"AVAILABLE APPOINTMENTS (Week {new_week})")
+                        print("=" * 50)
+                        print(app.get_state(thread_config_2).values["timeslots"])
+                    except ValueError:
+                        print("Invalid week number.")
+                    # Continue the booking loop
+                else:
+                    # User said no, repeat day/time entry
+                    print("\nPlease re-enter appointment details.")
+                    continue
             break
         else:
             try:

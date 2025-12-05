@@ -1,9 +1,9 @@
 import streamlit as st
 import os
-from RAG_steps.embeddings import embed_texts
-from RAG_steps.similarity import retrieve_relevant_chunks
-from RAG_steps.prompt import prepare_prompt
-from RAG_steps.call_llm import generate_answer
+from RAG.RAG_steps.embeddings import embed_texts
+from RAG.RAG_steps.similarity import retrieve_relevant_chunks
+from RAG.RAG_steps.prompt import prepare_prompt
+from RAG.RAG_steps.call_llm import generate_answer
 from dotenv import load_dotenv
 load_dotenv()
 

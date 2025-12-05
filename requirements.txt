@@ -1,0 +1,9 @@
+python-dotenv
+streamlit
+google-generativeai
+sentence_transformers
+numpy
+chromadb
+langgraph
+langchain
+langchain-google-genai

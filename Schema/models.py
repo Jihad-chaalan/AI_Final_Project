@@ -1,13 +1,14 @@
 from typing import TypedDict
 
 
-class Professional(TypedDict):
+class Doctors(TypedDict):
     id: int
     name: str
     Phone: str
     email: str
     Fee: int
     location: str
+    specialty: str
 class TimeSlot(TypedDict):
     id: int
     professional_id: int
@@ -29,4 +30,11 @@ class Appointment(TypedDict):
     end_time: str
     duration: int
     date: str
-    
+class MedicalRecord(TypedDict):
+    id: int
+    client_id: int
+    professional_id: int
+    symptoms: str
+    diagnosis: str
+    treatment: str
+    date: str    

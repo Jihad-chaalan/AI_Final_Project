@@ -1,44 +1,46 @@
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 def generate_answer(prompt, api_key):
     """
-    Generate answer using Gemini API.
+    Generate answer using DeepSeek API.
     Args:
-        prompt: User's question or input text
-        api_key: Gemini API key  
+        query: User's question
+        retrieved_chunks: List of relevant document chunks
+        api_key: DeepSeek API key  
     Returns: Generated answer from LLM
     """
     print("\n" + "=" * 25)
     print("STEP 8: Generate answer with LLM")
     print("=" * 25)
     
-    # Initialize Gemini client
-    client = genai.Client(api_key=api_key)
-
-    print("\nSending request to Gemini...")
+    # Initialize OpenAI client with DeepSeek endpoint
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.deepseek.com"
+    )
+    
+    print("\nSending request to DeepSeek...")
     print(f"  - Prompt length: {len(prompt)} characters")
-
+    
+    # Call DeepSeek API
     try:
-        # Call Gemini API (text generation)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.7,
-                max_output_tokens=500
-            )
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
         )
-
-        # Extract the text from the response
-        answer = response.text.strip() if hasattr(response, "text") else str(response)
+        
+        answer = response.choices[0].message.content
         
         print("Answer generated successfully")
         print(f"  - Response length: {len(answer)} characters")
         print("Answer: \n", answer)
         return answer
-
+        
     except Exception as e:
-        error_msg = f"Error calling Gemini API: {e}"
+        error_msg = f"Error calling DeepSeek API: {e}"
         print(f"✗ {error_msg}")
         return error_msg

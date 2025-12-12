@@ -216,7 +216,7 @@ def validate_specialty_match(state: AgentState):
 
     if matching_doctors:
         doctor_list = "\n".join([
-            f"- {d["name"]} ({d["specialty"]}) - {d["location"]}, ${d["Fee"]}"
+            f"- {d['name']} ({d['specialty']}) - {d['location']}, ${d['Fee']}"
             for d in matching_doctors
         ])
         return {
@@ -228,7 +228,7 @@ def validate_specialty_match(state: AgentState):
         # No exact match, show all available specialties
         all_specialties = list(set([d.specialty for d in Doctors]))
         all_doctors_list = "\n".join([
-            f"- {d["name"]} ({d["specialty"]}) - {d["location"]}, ${d["Fee"]}"
+            f"- {d['name']} ({d['specialty']}) - {d['location']}, ${d['Fee']}"
             for d in Doctors
         ])
         return {
@@ -267,27 +267,27 @@ def book_appointment_slot(
         week_number: Week number (1 = current week, 2 = next week, etc.)
     """
     professional = next(
-        (p for p in Doctors if p.name.lower() == professional_name.lower()),
+        (p for p in Doctors if p["name"].lower() == professional_name.lower()),
         None
     )
     if not professional:
         return f"Professional {professional_name} not found."
 
     client = next(
-        (c for c in CLIENTS if c.name.lower() == client_name.lower()),
+        (c for c in CLIENTS if c["name"].lower() == client_name.lower()),
         None
     )
     if not client:
         return f"Client {client_name} not found."
 
     time_slot = next(
-        (slot for slot in Doctors_TIMESLOTS
-         if slot.professional_id == professional.id
-         and slot.dayofweek.lower() == day_of_week.lower()
-         and slot.start_time == start_time
-         and slot.available),
-        None
-    )
+     (slot for slot in Doctors_TIMESLOTS
+     if slot["professional_id"] == professional["id"]  # ✅ CORRECT
+     and slot["dayofweek"].lower() == day_of_week.lower()
+     and slot["start_time"] == start_time
+     and slot["available"]),
+    None
+   )  
 
     if not time_slot:
         return f"Time slot not available for {professional_name} on {day_of_week} at {start_time}."
@@ -303,29 +303,31 @@ def book_appointment_slot(
     date_str = appointment_date.strftime("%Y-%m-%d")
 
     existing_appointment = next(
-        (apt for apt in APPOINTMENTS
-         if apt.professional_id == professional.id
-         and apt.date == date_str
-         and apt.start_time == start_time),
-        None
-    )
+    (apt for apt in APPOINTMENTS
+     if apt["professional_id"] == professional["id"]  # ✅ CORRECT
+     and apt["date"] == date_str
+     and apt["start_time"] == start_time),
+    None
+)
+
 
     if existing_appointment:
         return f"This slot is already booked for {professional_name} on {date_str} at {start_time}."
 
     new_appointment = Appointment(
-        id=len(APPOINTMENTS) + 1,
-        professional_id=professional.id,
-        client_id=client.id,
-        start_time=time_slot.start_time,
-        end_time=time_slot.end_time,
-        duration=60,
-        date=date_str
-    )
+    id=len(APPOINTMENTS) + 1,
+    professional_id=professional["id"],  # ✅ CORRECT
+    client_id=client["id"],  # ✅ CORRECT
+    start_time=time_slot["start_time"],  # ✅ CORRECT
+    end_time=time_slot["end_time"],  # ✅ CORRECT
+    duration=60,
+    date=date_str
+)
+
 
     APPOINTMENTS.append(new_appointment)
 
-    return f"Appointment booked successfully for {client_name} with {professional_name} on {day_of_week}, {date_str} (Week {week_number}) at {start_time}-{time_slot.end_time}."
+    return f"Appointment booked successfully for {client_name} with {professional_name} on {day_of_week}, {date_str} (Week {week_number}) at {start_time}-{time_slot['end_time']}."
 
 def get_current_next_week_slots(state: AgentState):
     """Get available timeslots for current week and next week using agent"""
@@ -404,7 +406,7 @@ def search_professionals(location: str = None, max_fee: int = None, specialty: s
 
     result = "Matching professionals:\n"
     for prof in matching:
-        result += f"- {prof["name"]} ({prof["specialty"]}): {prof["location"]}, ${prof["Fee"]}\n"
+        result += f"- {prof['name']} ({prof['specialty']}): {prof['location']}, ${prof['Fee']}\n"
     return result
 
 
@@ -716,3 +718,5 @@ if __name__ == "__main__":
     print("\n" + "#" * 50)
     print("TEST COMPLETED SUCCESSFULLY")
     print("#" * 50)
+
+    

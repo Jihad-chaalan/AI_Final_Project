@@ -4,6 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -33,8 +34,22 @@ def get_gemini():
     )
     return llm_model
 
+def get_deepseek():
+    """
+    returns a model to invoke DeepSeek
+    """
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+    url = os.getenv("DEEPSEEK_API_BASE")
 
-llm = get_gemini()
+    llm_model = ChatOpenAI(
+        model="deepseek-chat",
+        max_tokens=1000,
+        timeout=30,
+        api_key=deepseek_key,
+        base_url=url
+    )
+    return llm_model
+llm = get_deepseek()
 
 
 # Step 2: -------------------- State Definition ---------------------
@@ -64,7 +79,7 @@ memory = MemorySaver()
 def get_available_slots_for_weeks(professional_name: str, week_numbers: List[int]) -> str:
     """Get available appointments for specific weeks by comparing timeslots with booked appointments"""
     professional = next(
-        (p for p in Doctors if p.name.lower() == professional_name.lower()),
+        (p for p in Doctors if p["name"].lower() == professional_name.lower()),
         None
     )
 
@@ -73,7 +88,7 @@ def get_available_slots_for_weeks(professional_name: str, week_numbers: List[int
 
     prof_timeslots = [
         slot for slot in Doctors_TIMESLOTS
-        if slot.professional_id == professional.id
+        if slot["professional_id"] == professional["id"]
     ]
 
     if not prof_timeslots:
@@ -81,7 +96,7 @@ def get_available_slots_for_weeks(professional_name: str, week_numbers: List[int
 
     prof_appointments = [
         apt for apt in APPOINTMENTS
-        if apt.professional_id == professional.id
+        if apt["professional_id"] == professional["id"]
     ]
 
     today = datetime.now()
@@ -95,7 +110,7 @@ def get_available_slots_for_weeks(professional_name: str, week_numbers: List[int
         week_start = current_week_start + timedelta(weeks=week_num - 1)
         
         for slot in prof_timeslots:
-            day_name = slot.dayofweek.lower()
+            day_name = slot["dayofweek"].lower()
             day_index = days_of_week.index(day_name)
             
             slot_date = week_start + timedelta(days=day_index)
@@ -106,17 +121,17 @@ def get_available_slots_for_weeks(professional_name: str, week_numbers: List[int
             
             # Check if this slot is already booked
             is_booked = any(
-                datetime.strptime(apt.date, "%Y-%m-%d").date() == slot_date.date()
-                and apt.start_time == slot.start_time
+                datetime.strptime(apt["date"], "%Y-%m-%d").date() == slot_date.date()
+                and apt["start_time"] == slot["start_time"]
                 for apt in prof_appointments
             )
             
-            if not is_booked and slot.available:
+            if not is_booked and slot["available"]:
                 weeks_data[week_num].append({
                     "date": slot_date.strftime("%Y-%m-%d"),
-                    "day": slot.dayofweek,
-                    "start_time": slot.start_time,
-                    "end_time": slot.end_time
+                    "day": slot["dayofweek"],
+                    "start_time": slot["start_time"],
+                    "end_time": slot["end_time"]
                 })
 
     if not weeks_data:

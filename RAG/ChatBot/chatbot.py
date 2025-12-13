@@ -4,6 +4,7 @@ from RAG.RAG_steps.embeddings import embed_texts
 from RAG.RAG_steps.similarity import retrieve_relevant_chunks
 from RAG.RAG_steps.prompt import prepare_prompt
 from RAG.RAG_steps.call_llm import generate_answer
+from RAG.RAG_steps.vector_db import get_db_collection
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -54,18 +55,28 @@ st.title("ChatBot answer based on Our Data🤖")
 
 
 
+# Initialize the collection from ChromaDB if not in session state
 if "rag_collection" not in st.session_state:
-    st.write("there is no data about the user)")
-else:
+    # Try to load existing collection from ChromaDB
+    try:
+        st.session_state.rag_collection = get_db_collection()
+        # Check if the collection has any data
+        if st.session_state.rag_collection.count() == 0:
+            st.warning("⚠️ No documents found in the database. Please upload documents in the Load page first.")
+        else:
+            st.success(f"✅ Loaded {st.session_state.rag_collection.count()} chunks from database")
+    except Exception as e:
+        st.error(f"❌ Error loading collection: {e}")
+        st.stop()
+
+# Only show the chat interface if we have data
+if st.session_state.rag_collection.count() > 0:
     st.text_input("Please enter your message", key="user_msg", on_change=generate_response)
-
-
-
-
-
-
-for m in  st.session_state.messages:
-    if m['role'] == "user":
-        st.write(f"🙎 ***You:*** '{m['content']}")
-    else:
-        st.write(f"🤖 ***AI:*** '{m['content']}")
+    
+    for m in st.session_state.messages:
+        if m['role'] == "user":
+            st.write(f"🙎 ***You:*** '{m['content']}")
+        else:
+            st.write(f"🤖 ***AI:*** '{m['content']}")
+else:
+    st.info("📂 Please go to the **Load** page and upload some documents first to start chatting!")

@@ -1,4 +1,4 @@
-# Agent/test.py - Fully Functional with Complete Workflow Understanding
+# Agent/test.py - Fully Functional with Fresh Thread After Booking
 
 import streamlit as st
 import sys
@@ -21,7 +21,7 @@ if "messages" not in st.session_state:
 if "client_name" not in st.session_state:
     st.session_state.client_name = None
 if "waiting_for" not in st.session_state:
-    st.session_state.waiting_for = "name"  # name, query, professional, booking
+    st.session_state.waiting_for = "name"
 if "current_state" not in st.session_state:
     st.session_state.current_state = None
 
@@ -63,6 +63,7 @@ with st.sidebar:
     st.code(f"Stage: {st.session_state.waiting_for}")
     if st.session_state.client_name:
         st.code(f"Client: {st.session_state.client_name}")
+    st.code(f"Thread: ...{st.session_state.thread_id[-8:]}")
     
     if st.session_state.current_state:
         with st.expander("🔍 Debug State"):
@@ -121,18 +122,12 @@ if user_input:
         elif st.session_state.waiting_for == "query":
             with st.spinner("🤖 Analyzing your request..."):
                 # INVOKE 1: Start workflow with query
-                # This runs: node_init -> STOPS BEFORE node_classify
                 app.invoke({
                     "query": user_input,
                     "client_name": st.session_state.client_name
                 }, get_thread_config())
                 
                 # INVOKE 2: Continue classification
-                # Runs: node_classify -> routes based on classification
-                # If professional_not_exists: runs node_get_specialist -> node_validate_specialty 
-                #                            -> STOPS BEFORE node_find_professional
-                # If professional_exists: goes to node_get_current_next_week_slots 
-                #                        -> STOPS AFTER node_get_current_next_week_slots
                 app.invoke(None, get_thread_config())
                 
                 # Get state
@@ -141,7 +136,7 @@ if user_input:
                 
                 # Check which path we took
                 if state.get('classification') == "professional_not_exists":
-                    # SYMPTOM-BASED PATH: Need to select professional
+                    # SYMPTOM-BASED PATH
                     specialty = state.get('specialty', 'a specialist')
                     prof_list = state.get('professional_list', '')
                     
@@ -177,21 +172,16 @@ if user_input:
                 # Update state with professional selection
                 app.update_state(get_thread_config(), {
                     "professional_name": professional_name,
-                    "professional_criteria": professional_name
+                    # "professional_criteria": professional_name
                 })
                 
-                # CRITICAL: Need 2 invokes here!
-                
                 # INVOKE 1: Resume workflow
-                # Runs: node_find_professional -> STOPS BEFORE node_fetch_professionals
                 app.invoke(None, get_thread_config())
                 
                 # INVOKE 2: Continue through fetch and get slots
-                # Runs: node_fetch_professionals -> node_get_current_next_week_slots
-                #       -> STOPS AFTER node_get_current_next_week_slots
                 app.invoke(None, get_thread_config())
                 
-                # Now get state with timeslots
+                # Get state with timeslots
                 state = app.get_state(get_thread_config()).values
                 st.session_state.current_state = state
                 
@@ -234,7 +224,6 @@ if user_input:
                         })
                         
                         # INVOKE: Complete booking
-                        # Runs: routes to node_book_appointment -> node_final_format -> END
                         app.invoke(None, get_thread_config())
                         
                         # Get final state
@@ -251,6 +240,11 @@ if user_input:
                             response += "---\n\nNeed another appointment? Just describe what you need!"
                             
                             st.session_state.waiting_for = "query"
+                            
+                            # START FRESH THREAD for next booking
+                            st.session_state.thread_id = f"chat_{int(datetime.now().timestamp())}"
+                            st.session_state.current_state = None
+                            
                             st.balloons()
                         else:
                             response = f"⚠️ {booking_msg}\n\nPlease try a different slot."

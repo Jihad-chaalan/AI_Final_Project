@@ -1,5 +1,6 @@
-# Update Agent/test.py to be continuous
+# Agent/test.py - Fully Functional with Complete Workflow Understanding
 
+import streamlit as st
 import sys
 import os
 from datetime import datetime
@@ -7,178 +8,279 @@ from datetime import datetime
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from Agent.multi_agent import app, Doctors, CLIENTS
+from Agent.multi_agent import app, Doctors, CLIENTS, APPOINTMENTS
 
-def print_header(title):
-    print("\n" + "=" * 50)
-    print(title)
-    print("=" * 50)
+# Page config
+st.set_page_config(page_title="AI Booking Agent", page_icon="🏥", layout="centered")
 
-def continuous_chat():
-    """Continuous conversation with the agent"""
+# Initialize session state
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = f"chat_{int(datetime.now().timestamp())}"
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "client_name" not in st.session_state:
+    st.session_state.client_name = None
+if "waiting_for" not in st.session_state:
+    st.session_state.waiting_for = "name"  # name, query, professional, booking
+if "current_state" not in st.session_state:
+    st.session_state.current_state = None
+
+def get_thread_config():
+    return {"configurable": {"thread_id": st.session_state.thread_id}, "recursion_limit": 25}
+
+def add_message(role, content):
+    st.session_state.messages.append({"role": role, "content": content})
+
+# Header
+st.title("🏥 AI Medical Appointment Booking")
+st.caption("Multi-Agent System with LangGraph")
+
+# Sidebar
+with st.sidebar:
+    st.header("📊 System Info")
     
-    print("#" * 50)
-    print("CONTINUOUS AGENT CHAT")
-    print("Type 'quit' to exit, 'reset' to start over")
-    print("#" * 50)
+    with st.expander("🩺 Available Doctors", expanded=True):
+        for doc in Doctors:
+            st.write(f"**{doc['name']}**")
+            st.caption(f"{doc['specialty']}")
+            st.caption(f"{doc['location']} | ${doc['Fee']}")
+            st.divider()
     
-    # Show available resources
-    print("\n📋 Available Doctors:")
-    for doc in Doctors:
-        print(f"  • {doc['name']} - {doc['specialty']} ({doc['location']}) - ${doc['Fee']}")
+    with st.expander("👥 Clients"):
+        for client in CLIENTS:
+            st.write(f"• {client['name']}")
     
-    print("\n👥 Available Clients:")
-    for client in CLIENTS:
-        print(f"  • {client['name']}")
+    with st.expander("📅 Recent Bookings"):
+        st.metric("Total", len(APPOINTMENTS))
+        if APPOINTMENTS:
+            for apt in APPOINTMENTS[-3:]:
+                doctor = next((d for d in Doctors if d['id'] == apt['professional_id']), None)
+                if doctor:
+                    st.caption(f"✓ {doctor['name']} - {apt['date']}")
     
-    # Initialize
-    thread_id = f"chat_{int(datetime.now().timestamp())}"
-    thread_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 20}
+    st.divider()
+    st.write("**Current Status:**")
+    st.code(f"Stage: {st.session_state.waiting_for}")
+    if st.session_state.client_name:
+        st.code(f"Client: {st.session_state.client_name}")
     
-    client_name = None
-    current_state = None
+    if st.session_state.current_state:
+        with st.expander("🔍 Debug State"):
+            state = st.session_state.current_state
+            st.json({
+                "classification": state.get('classification'),
+                "professional_name": state.get('professional_name'),
+                "has_timeslots": bool(state.get('timeslots')),
+                "user_action": state.get('user_action')
+            })
     
-    while True:
-        print("\n" + "-" * 50)
-        
-        # Get client name if not set
-        if not client_name:
-            client_name = input("👤 Your name: ").strip()
-            if client_name.lower() == 'quit':
-                print("\n👋 Goodbye!")
-                break
-            continue
-        
-        # Get user input
-        user_input = input(f"👤 {client_name}: ").strip()
-        
-        if not user_input:
-            continue
-        
-        if user_input.lower() == 'quit':
-            print("\n👋 Goodbye!")
-            break
-        
-        if user_input.lower() == 'reset':
-            print("\n🔄 Starting new conversation...")
-            thread_id = f"chat_{int(datetime.now().timestamp())}"
-            thread_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 20}
-            client_name = None
-            current_state = None
-            continue
-        
-        try:
-            print("\n🤖 Agent: Processing...")
+    st.divider()
+    if st.button("🔄 Reset", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
+
+# Chat Display
+st.subheader("💬 Conversation")
+chat_container = st.container(height=400, border=True)
+
+with chat_container:
+    if st.session_state.messages:
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+    else:
+        with st.chat_message("assistant"):
+            st.markdown("👋 **Welcome!** I'll help you book a medical appointment.\n\n**First, what's your name?**")
+
+# Chat Input
+user_input = st.chat_input("Type your message here...")
+
+if user_input:
+    add_message("user", user_input)
+    
+    try:
+        # ============================================================
+        # STAGE 1: GET CLIENT NAME
+        # ============================================================
+        if st.session_state.waiting_for == "name":
+            st.session_state.client_name = user_input
+            st.session_state.waiting_for = "query"
             
-            # Check if we need to start new flow or continue existing
-            if not current_state or current_state.get('final_answer'):
-                # Start new booking flow
-                print_header("STARTING NEW BOOKING")
-                
+            response = f"Nice to meet you, **{user_input}**! 👋\n\n"
+            response += "How can I help you today?\n\n"
+            response += "**You can:**\n"
+            response += "• Describe symptoms: *'I have chest pain'*\n"
+            response += "• Request a doctor: *'Book with Dr. Ali'*\n"
+            response += "• Search specialists: *'Show cardiologists in Beirut'*"
+            
+            add_message("assistant", response)
+        
+        # ============================================================
+        # STAGE 2: PROCESS INITIAL QUERY
+        # ============================================================
+        elif st.session_state.waiting_for == "query":
+            with st.spinner("🤖 Analyzing your request..."):
+                # INVOKE 1: Start workflow with query
+                # This runs: node_init -> STOPS BEFORE node_classify
                 app.invoke({
                     "query": user_input,
-                    "client_name": client_name
-                }, thread_config)
+                    "client_name": st.session_state.client_name
+                }, get_thread_config())
                 
-                app.invoke(None, thread_config)
+                # INVOKE 2: Continue classification
+                # Runs: node_classify -> routes based on classification
+                # If professional_not_exists: runs node_get_specialist -> node_validate_specialty 
+                #                            -> STOPS BEFORE node_find_professional
+                # If professional_exists: goes to node_get_current_next_week_slots 
+                #                        -> STOPS AFTER node_get_current_next_week_slots
+                app.invoke(None, get_thread_config())
                 
-                state = app.get_state(thread_config).values
-                current_state = state
+                # Get state
+                state = app.get_state(get_thread_config()).values
+                st.session_state.current_state = state
                 
-                # Show response
+                # Check which path we took
                 if state.get('classification') == "professional_not_exists":
-                    print_header("AGENT FOUND SPECIALISTS")
+                    # SYMPTOM-BASED PATH: Need to select professional
+                    specialty = state.get('specialty', 'a specialist')
+                    prof_list = state.get('professional_list', '')
                     
-                    if state.get('specialty'):
-                        print(f"Specialty: {state['specialty']}")
+                    response = f"**Identified Specialty:** {specialty}\n\n"
+                    response += f"**Available Specialists:**\n{prof_list}\n\n"
+                    response += "**Which doctor would you like?** (Type the name)"
                     
-                    if state.get('professional_list'):
-                        print(f"\n{state['professional_list']}")
+                    st.session_state.waiting_for = "professional"
+                    add_message("assistant", response)
                     
-                    if state.get('message'):
-                        print(f"\n{state['message']}")
-                    
-                    print("\n🤖 Agent: Which doctor would you like? (Just type the name)")
-                
                 elif state.get('timeslots'):
-                    print_header("AVAILABLE TIMESLOTS")
-                    print(state['timeslots'])
-                    print("\n🤖 Agent: Which slot? Format: <Day> <Time> <Week>")
-                    print("         Example: Monday 09:00 2")
+                    # DIRECT PATH: Already got timeslots
+                    doctor_name = state.get('professional_name', 'the doctor')
+                    timeslots = state['timeslots']
+                    
+                    response = f"**Available slots for Dr. {doctor_name}:**\n\n```\n{timeslots}\n```\n\n"
+                    response += "**To book, type:** `Day Time Week`\n"
+                    response += "**Example:** `Monday 09:00 2`"
+                    
+                    st.session_state.waiting_for = "booking"
+                    add_message("assistant", response)
+                else:
+                    response = "I couldn't understand that. Could you rephrase?"
+                    add_message("assistant", response)
+        
+        # ============================================================
+        # STAGE 3: SELECT PROFESSIONAL (after symptom-based search)
+        # ============================================================
+        elif st.session_state.waiting_for == "professional":
+            professional_name = user_input.strip()
             
-            else:
-                # Continue existing flow
-                state = current_state
+            with st.spinner(f"🔍 Getting slots for Dr. {professional_name}..."):
+                # Update state with professional selection
+                app.update_state(get_thread_config(), {
+                    "professional_name": professional_name,
+                    "professional_criteria": professional_name
+                })
                 
-                # Check if selecting professional
-                if state.get('classification') == "professional_not_exists" and not state.get('timeslots'):
-                    print_header("GETTING SLOTS")
-                    
-                    app.update_state(thread_config, {
-                        "professional_name": user_input,
-                        "professional_criteria": user_input
-                    })
-                    
-                    app.invoke(None, thread_config)
-                    
-                    state = app.get_state(thread_config).values
-                    current_state = state
-                    
-                    if state.get('timeslots'):
-                        print_header("AVAILABLE TIMESLOTS")
-                        print(state['timeslots'])
-                        print("\n🤖 Agent: Which slot? Format: <Day> <Time> <Week>")
-                        print("         Example: Monday 09:00 2")
-                    else:
-                        print("\n🤖 Agent: No slots available. Try another doctor or request.")
-                        current_state = None
+                # CRITICAL: Need 2 invokes here!
                 
-                # Check if booking
-                elif state.get('timeslots') and not state.get('final_answer'):
-                    # Parse booking: "Monday 09:00 2"
-                    parts = user_input.split()
+                # INVOKE 1: Resume workflow
+                # Runs: node_find_professional -> STOPS BEFORE node_fetch_professionals
+                app.invoke(None, get_thread_config())
+                
+                # INVOKE 2: Continue through fetch and get slots
+                # Runs: node_fetch_professionals -> node_get_current_next_week_slots
+                #       -> STOPS AFTER node_get_current_next_week_slots
+                app.invoke(None, get_thread_config())
+                
+                # Now get state with timeslots
+                state = app.get_state(get_thread_config()).values
+                st.session_state.current_state = state
+                
+                if state.get('timeslots'):
+                    timeslots = state['timeslots']
                     
-                    if len(parts) >= 3:
-                        day_of_week = parts[0]
-                        start_time = parts[1]
-                        week_number = int(parts[2])
-                        
-                        print_header("BOOKING APPOINTMENT")
-                        print(f"Day: {day_of_week}, Time: {start_time}, Week: {week_number}")
-                        
-                        app.update_state(thread_config, {
+                    response = f"**Available slots for Dr. {professional_name}:**\n\n```\n{timeslots}\n```\n\n"
+                    response += "**To book, type:** `Day Time Week`\n"
+                    response += "**Example:** `Monday 09:00 2`"
+                    
+                    st.session_state.waiting_for = "booking"
+                    add_message("assistant", response)
+                else:
+                    response = f"❌ No slots available for Dr. {professional_name}.\n\n"
+                    response += "Try another doctor from the list."
+                    add_message("assistant", response)
+                    st.session_state.waiting_for = "professional"
+        
+        # ============================================================
+        # STAGE 4: BOOK APPOINTMENT
+        # ============================================================
+        elif st.session_state.waiting_for == "booking":
+            # Parse: "Monday 09:00 2"
+            parts = user_input.strip().split()
+            
+            if len(parts) >= 3:
+                day_of_week = parts[0]
+                start_time = parts[1]
+                
+                try:
+                    week_number = int(parts[2])
+                    
+                    with st.spinner("📝 Booking your appointment..."):
+                        # Update state with booking details
+                        app.update_state(get_thread_config(), {
                             "user_action": "book",
                             "day_of_week": day_of_week,
                             "start_time": start_time,
                             "week_number": week_number
                         })
                         
-                        app.invoke(None, thread_config)
+                        # INVOKE: Complete booking
+                        # Runs: routes to node_book_appointment -> node_final_format -> END
+                        app.invoke(None, get_thread_config())
                         
-                        state = app.get_state(thread_config).values
-                        current_state = state
+                        # Get final state
+                        state = app.get_state(get_thread_config()).values
+                        st.session_state.current_state = state
                         
-                        print_header("BOOKING RESULT")
-                        if state.get('message'):
-                            print(state['message'])
+                        booking_msg = state.get('message', 'Booking completed!')
+                        final_answer = state.get('final_answer', '')
                         
-                        if state.get('final_answer'):
-                            print(f"\n{state['final_answer']}")
+                        if "successfully" in booking_msg.lower():
+                            response = f"✅ **Booking Successful!**\n\n{booking_msg}\n\n"
+                            if final_answer:
+                                response += f"```\n{final_answer}\n```\n\n"
+                            response += "---\n\nNeed another appointment? Just describe what you need!"
+                            
+                            st.session_state.waiting_for = "query"
+                            st.balloons()
+                        else:
+                            response = f"⚠️ {booking_msg}\n\nPlease try a different slot."
                         
-                        print("\n🤖 Agent: Need anything else? Or type a new request!")
-                    else:
-                        print("\n❌ Format: <Day> <Time> <Week>")
-                        print("   Example: Monday 09:00 2")
+                        add_message("assistant", response)
+                        
+                except ValueError:
+                    response = "❌ Invalid week number.\n\n**Format:** `Day Time Week`\n**Example:** `Monday 09:00 2`"
+                    add_message("assistant", response)
+            else:
+                response = "❌ Invalid format.\n\n**Format:** `Day Time Week`\n**Example:** `Monday 09:00 2`"
+                add_message("assistant", response)
+    
+    except Exception as e:
+        error_msg = f"❌ **Error:** {str(e)}\n\nLet's start over. What would you like to do?"
+        add_message("assistant", error_msg)
+        st.session_state.waiting_for = "query"
         
-        except Exception as e:
-            print(f"\n❌ Error: {e}")
+        with st.expander("🔍 Technical Details"):
             import traceback
-            traceback.print_exc()
-            print("\nType 'reset' to start over or continue with a new request")
-            current_state = None
+            st.code(traceback.format_exc())
+    
+    st.rerun()
 
-if __name__ == "__main__":
-    try:
-        continuous_chat()
-    except KeyboardInterrupt:
-        print("\n\n👋 Chat ended!")
+# Footer
+st.divider()
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.caption("🤖 LangGraph Multi-Agent")
+with col2:
+    st.caption("🧠 DeepSeek LLM")
+with col3:
+    st.caption(f"💾 {len(APPOINTMENTS)} bookings")

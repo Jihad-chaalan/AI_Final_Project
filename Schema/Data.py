@@ -5,7 +5,7 @@ Doctors=[
     Doctors(id=2, name="Malik", Phone="01123456789", email="", Fee=50, location="Beirut",specialty="Dermatology"),
     Doctors(id=3, name="Fatima", Phone="01123456789", email="", Fee=70, location="Byblos",specialty="Pediatrics"),
     Doctors(id=4, name="Sara", Phone="01123456789", email="", Fee=120, location="Saida",specialty="Neurology"),
-    Doctors(id=5, name="Mohamed", Phone="01123456789", email="", Fee=90, location="Tyre",specialty="Orthopedics"),
+    Doctors(id=5, name="Mohamed", Phone="01123456789", email="", Fee=90, location="Tyre",specialty="Cardiology"),
 ]
 Doctors_TIMESLOTS=[
     TimeSlot(id=1, professional_id=1, start_time="09:00", end_time="10:00", dayofweek="Monday", available=True),
@@ -20,12 +20,12 @@ Doctors_TIMESLOTS=[
     TimeSlot(id=10, professional_id=4, start_time="11:00", end_time="12:00", dayofweek="Thursday", available=True),
 ]
 APPOINTMENTS=[
-    Appointment(id=1, professional_id=1, client_id=1, start_time="10:00", end_time="11:00", duration=60, date="2025-12-01"),
-    Appointment(id=2, professional_id=2, client_id=2, start_time="10:00", end_time="11:00", duration=60, date="2025-12-02"),
+    Appointment(id=1, professional_id=1, client_id=1, start_time="10:00", end_time="11:00", duration=60, date="2025-12-15"),
+    Appointment(id=2, professional_id=2, client_id=2, start_time="10:00", end_time="11:00", duration=60, date="2025-12-22"),
     Appointment(id=3, professional_id=3, client_id=3, start_time="10:00", end_time="11:00", duration=60, date="2025-12-01"),
     Appointment(id=4, professional_id=4, client_id=4, start_time="10:00", end_time="11:00", duration=60, date="2025-12-03"),
     Appointment(id=5, professional_id=4, client_id=4, start_time="11:00", end_time="12:00", duration=60, date="2025-12-04"),
-    Appointment(id=6, professional_id=1, client_id=2, start_time="11:00", end_time="12:00", duration=60, date="2025-12-08"),
+    Appointment(id=6, professional_id=1, client_id=2, start_time="11:00", end_time="12:00", duration=60, date="2025-12-18"),
     Appointment(id=7, professional_id=2, client_id=2, start_time="10:00", end_time="11:00", duration=60, date="2026-1-27"),
 ]
 CLIENTS=[

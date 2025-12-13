@@ -1,4 +1,4 @@
-# Agent/test.py - Fully Functional with Fresh Thread After Booking
+# Agent/test.py - Complete Multi-Agent Booking System
 
 import streamlit as st
 import sys
@@ -71,8 +71,10 @@ with st.sidebar:
             st.json({
                 "classification": state.get('classification'),
                 "professional_name": state.get('professional_name'),
+                "specialty": state.get('specialty'),
                 "has_timeslots": bool(state.get('timeslots')),
-                "user_action": state.get('user_action')
+                "user_action": state.get('user_action'),
+                "week_number": state.get('week_number')
             })
     
     st.divider()
@@ -153,8 +155,8 @@ if user_input:
                     timeslots = state['timeslots']
                     
                     response = f"**Available slots for Dr. {doctor_name}:**\n\n```\n{timeslots}\n```\n\n"
-                    response += "**To book, type:** `Day Time Week`\n"
-                    response += "**Example:** `Monday 09:00 2`"
+                    response += "**To book, type:** `Day Time Week` (e.g., `Monday 09:00 2`)\n"
+                    response += "**To view another week, type:** `week 5` or just `5`"
                     
                     st.session_state.waiting_for = "booking"
                     add_message("assistant", response)
@@ -172,7 +174,7 @@ if user_input:
                 # Update state with professional selection
                 app.update_state(get_thread_config(), {
                     "professional_name": professional_name,
-                    # "professional_criteria": professional_name
+                    "professional_criteria": professional_name
                 })
                 
                 # INVOKE 1: Resume workflow
@@ -189,8 +191,8 @@ if user_input:
                     timeslots = state['timeslots']
                     
                     response = f"**Available slots for Dr. {professional_name}:**\n\n```\n{timeslots}\n```\n\n"
-                    response += "**To book, type:** `Day Time Week`\n"
-                    response += "**Example:** `Monday 09:00 2`"
+                    response += "**To book, type:** `Day Time Week` (e.g., `Monday 09:00 2`)\n"
+                    response += "**To view another week, type:** `week 5` or just `5`"
                     
                     st.session_state.waiting_for = "booking"
                     add_message("assistant", response)
@@ -201,62 +203,125 @@ if user_input:
                     st.session_state.waiting_for = "professional"
         
         # ============================================================
-        # STAGE 4: BOOK APPOINTMENT
+        # STAGE 4: BOOK APPOINTMENT OR VIEW DIFFERENT WEEK
         # ============================================================
         elif st.session_state.waiting_for == "booking":
-            # Parse: "Monday 09:00 2"
-            parts = user_input.strip().split()
+            user_input_lower = user_input.strip().lower()
             
-            if len(parts) >= 3:
-                day_of_week = parts[0]
-                start_time = parts[1]
+            # Check if user wants to view a different week (single digit or "week X")
+            if user_input_lower.startswith("week ") or (user_input_lower.isdigit() and len(user_input.split()) == 1):
+                # Extract week number
+                if user_input_lower.startswith("week "):
+                    week_str = user_input_lower.replace("week ", "").strip()
+                else:
+                    week_str = user_input_lower
                 
                 try:
-                    week_number = int(parts[2])
+                    week_number = int(week_str)
                     
-                    with st.spinner("📝 Booking your appointment..."):
-                        # Update state with booking details
-                        app.update_state(get_thread_config(), {
-                            "user_action": "book",
-                            "day_of_week": day_of_week,
-                            "start_time": start_time,
-                            "week_number": week_number
-                        })
-                        
-                        # INVOKE: Complete booking
-                        app.invoke(None, get_thread_config())
-                        
-                        # Get final state
-                        state = app.get_state(get_thread_config()).values
-                        st.session_state.current_state = state
-                        
-                        booking_msg = state.get('message', 'Booking completed!')
-                        final_answer = state.get('final_answer', '')
-                        
-                        if "successfully" in booking_msg.lower():
-                            response = f"✅ **Booking Successful!**\n\n{booking_msg}\n\n"
-                            if final_answer:
-                                response += f"```\n{final_answer}\n```\n\n"
-                            response += "---\n\nNeed another appointment? Just describe what you need!"
-                            
-                            st.session_state.waiting_for = "query"
-                            
-                            # START FRESH THREAD for next booking
-                            st.session_state.thread_id = f"chat_{int(datetime.now().timestamp())}"
-                            st.session_state.current_state = None
-                            
-                            st.balloons()
-                        else:
-                            response = f"⚠️ {booking_msg}\n\nPlease try a different slot."
-                        
+                    if week_number < 1:
+                        response = "❌ Week number must be 1 or greater."
                         add_message("assistant", response)
-                        
+                    else:
+                        with st.spinner(f"🔍 Getting slots for week {week_number}..."):
+                            # Update state to view specific week
+                            app.update_state(get_thread_config(), {
+                                "user_action": "continue",
+                                "week_number": week_number
+                            })
+                            
+                            # INVOKE: Get specific week slots
+                            app.invoke(None, get_thread_config())
+                            
+                            # Get updated state
+                            state = app.get_state(get_thread_config()).values
+                            st.session_state.current_state = state
+                            
+                            if state.get('timeslots'):
+                                timeslots = state['timeslots']
+                                professional_name = state.get('professional_name', 'the doctor')
+                                
+                                response = f"**Available slots for Dr. {professional_name} (Week {week_number}):**\n\n```\n{timeslots}\n```\n\n"
+                                response += "**To book, type:** `Day Time Week` (e.g., `Wednesday 10:00 3`)\n"
+                                response += "**To view another week, type:** `week 6` or just `6`"
+                                
+                                add_message("assistant", response)
+                            else:
+                                response = f"❌ No slots available for week {week_number}.\n\nTry another week or book from available slots."
+                                add_message("assistant", response)
+                
                 except ValueError:
-                    response = "❌ Invalid week number.\n\n**Format:** `Day Time Week`\n**Example:** `Monday 09:00 2`"
+                    response = "❌ Invalid week number.\n\n**To view a week:** Type `week 5` or just `5`\n**To book:** Type `Day Time Week` (e.g., `Wednesday 10:00 3`)"
                     add_message("assistant", response)
+            
             else:
-                response = "❌ Invalid format.\n\n**Format:** `Day Time Week`\n**Example:** `Monday 09:00 2`"
-                add_message("assistant", response)
+                # Parse booking: "Wednesday 10:00 3"
+                parts = user_input.strip().split()
+                
+                if len(parts) >= 3:
+                    day_of_week = parts[0]
+                    start_time = parts[1]
+                    
+                    # Normalize time format: if user types "10" convert to "10:00"
+                    if ":" not in start_time:
+                        start_time = f"{start_time}:00"
+                    
+                    try:
+                        week_number = int(parts[2])
+                        
+                        if week_number < 1:
+                            response = "❌ Week number must be 1 or greater.\n\n**Example:** `Wednesday 10:00 3`"
+                            add_message("assistant", response)
+                        else:
+                            with st.spinner("📝 Booking your appointment..."):
+                                # Update state with booking details
+                                app.update_state(get_thread_config(), {
+                                    "user_action": "book",
+                                    "day_of_week": day_of_week,
+                                    "start_time": start_time,
+                                    "week_number": week_number
+                                })
+                                
+                                # INVOKE: Complete booking
+                                app.invoke(None, get_thread_config())
+                                
+                                # Get final state with fresh booking result
+                                state = app.get_state(get_thread_config()).values
+                                st.session_state.current_state = state
+                                
+                                booking_msg = state.get('message', 'Booking completed!')
+                                final_answer = state.get('final_answer', '')
+                                
+                                if "successfully" in booking_msg.lower():
+                                    response = f"✅ **Booking Successful!**\n\n{booking_msg}\n\n"
+                                    if final_answer:
+                                        response += f"```\n{final_answer}\n```\n\n"
+                                    response += "---\n\nNeed another appointment? Just describe what you need!"
+                                    
+                                    st.session_state.waiting_for = "query"
+                                    
+                                    # START FRESH THREAD for next booking
+                                    st.session_state.thread_id = f"chat_{int(datetime.now().timestamp())}"
+                                    st.session_state.current_state = None
+                                    
+                                    st.balloons()
+                                else:
+                                    # Failed booking - show specific error
+                                    response = f"⚠️ **Booking Failed:**\n\n{booking_msg}\n\n"
+                                    response += "**Please check:**\n"
+                                    response += "• Time format is HH:MM (e.g., 10:00 not 10)\n"
+                                    response += "• Day is spelled correctly (Wednesday, Thursday, etc.)\n"
+                                    response += "• Slot is actually available in the week you specified\n\n"
+                                    response += "**Try again or type a week number to view other weeks**"
+                                
+                                add_message("assistant", response)
+                            
+                    except ValueError:
+                        response = "❌ Invalid week number.\n\n**Format:** `Day Time Week`\n**Example:** `Wednesday 10:00 3`"
+                        add_message("assistant", response)
+                else:
+                    response = "❌ Invalid format.\n\n**To book:** Type `Day Time Week` (e.g., `Wednesday 10:00 3`)\n**To view a week:** Type `week 5` or just `5`"
+                    add_message("assistant", response)
     
     except Exception as e:
         error_msg = f"❌ **Error:** {str(e)}\n\nLet's start over. What would you like to do?"

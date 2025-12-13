@@ -226,7 +226,7 @@ def validate_specialty_match(state: AgentState):
         }
     else:
         # No exact match, show all available specialties
-        all_specialties = list(set([d.specialty for d in Doctors]))
+        all_specialties = list(set([d["specialty"] for d in Doctors]))
         all_doctors_list = "\n".join([
             f"- {d['name']} ({d['specialty']}) - {d['location']}, ${d['Fee']}"
             for d in Doctors
@@ -248,7 +248,6 @@ def get_slots_for_weeks(professional_name: str, week_numbers: str) -> str:
     weeks = [int(w.strip()) for w in week_numbers.split(",")]
     return get_available_slots_for_weeks(professional_name, weeks)
 
-
 @tool
 def book_appointment_slot(
         professional_name: str,
@@ -266,6 +265,20 @@ def book_appointment_slot(
         start_time: Start time in HH:MM format (e.g., 09:00)
         week_number: Week number (1 = current week, 2 = next week, etc.)
     """
+    # Ensure week_number is int
+    try:
+        week_number = int(week_number)
+    except ValueError:
+        return f"Invalid week number: {week_number}"
+
+    # Normalize start_time to HH:MM
+    try:
+        if ":" in start_time:
+            h, m = start_time.split(":")
+            start_time = f"{int(h):02d}:{int(m):02d}"
+    except:
+        pass
+
     professional = next(
         (p for p in Doctors if p["name"].lower() == professional_name.lower()),
         None
@@ -297,11 +310,14 @@ def book_appointment_slot(
     week_start = current_week_start + timedelta(weeks=week_number - 1)
 
     days_of_week_list = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    target_day_index = days_of_week_list.index(day_of_week.lower())
+    try:
+        target_day_index = days_of_week_list.index(day_of_week.lower())
+    except ValueError:
+        return f"Invalid day of week: {day_of_week}"
 
     appointment_date = week_start + timedelta(days=target_day_index)
     date_str = appointment_date.strftime("%Y-%m-%d")
-
+    
     existing_appointment = next(
     (apt for apt in APPOINTMENTS
      if apt["professional_id"] == professional["id"]  # ✅ CORRECT
@@ -393,10 +409,10 @@ def search_professionals(location: str = None, max_fee: int = None, specialty: s
     matching = Doctors.copy()
 
     if location:
-        matching = [p for p in matching if location.lower() in p.location.lower()]
+        matching = [p for p in matching if location.lower() in p["location"].lower()]
 
     if max_fee:
-        matching = [p for p in matching if p.Fee <= max_fee]
+        matching = [p for p in matching if p["Fee"] <= max_fee]
     
     if specialty:
         matching = [p for p in matching if specialty.lower() in p["specialty"].lower() or p["specialty"].lower() in specialty.lower()]
@@ -474,7 +490,7 @@ def get_specific_week_slots(state: AgentState):
 
 
 def book_appointment(state: AgentState):
-    """Book an appointment using agent with tool"""
+    """Book an appointment by directly calling the tool"""
     professional_name = state.get("professional_name")
     client_name = state.get("client_name")
     day_of_week = state.get("day_of_week")
@@ -484,30 +500,14 @@ def book_appointment(state: AgentState):
     if not all([professional_name, client_name, day_of_week, start_time]):
         return {"message": "Missing booking details. Please provide professional name, day, and time."}
 
-    prompt = """You are an appointment booking assistant.
-    Use the book_appointment_slot tool to book appointments.
-    Extract all required parameters from the user request:
-    - professional_name
-    - client_name
-    - day_of_week (Monday, Tuesday, etc.)
-    - start_time (HH:MM format)
-    - week_number (default 1 for current week)
-    """
-
-    agent = create_agent(
-        model=llm,
-        tools=[book_appointment_slot],
-        system_prompt=prompt,
-    )
-
-    result = agent.invoke({
-        "messages": [(
-            "user",
-            f"Book appointment for {client_name} with {professional_name} on {day_of_week} at {start_time} for week {week_number}"
-        )]
+    # Call the booking tool directly using invoke()
+    response = book_appointment_slot.invoke({
+        "professional_name": professional_name,
+        "client_name": client_name,
+        "day_of_week": day_of_week,
+        "start_time": start_time,
+        "week_number": week_number
     })
-
-    response = result["messages"][-1].content
 
     return {
         "message": response
@@ -619,104 +619,92 @@ app = graph.compile(
 
 thread_config = {"configurable": {"thread_id": "case_101"}, "recursion_limit": 20}
 
-
-# Step 9: ----------------- Run Example -----------------------------
+#Step 9: ----------------- Run Example -----------------------------
 if __name__ == "__main__":
     import time
-    
-    # Test Case: Finding a specialist based on symptoms
+
     print("#" * 50)
-    print("TEST CASE: Finding a specialist based on symptoms")
-    print("#" * 50)
-    
-    thread_id = f"case_{int(time.time())}"
-    thread_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 20}
-    
-    # User describes symptoms instead of naming a doctor
-    print("\nUser query: 'I have chest pain and shortness of breath, I need a doctor'")
-    
-    app.invoke({
-        "query": "I have chest pain and shortness of breath, I need a doctor",
-        "client_name": "Malik"
-    }, thread_config)
-    
-    # Continue through classification -> get_specialist -> validate_specialty
-    app.invoke(None, thread_config)
-    
-    state = app.get_state(thread_config).values
-    
-    print("\n" + "=" * 50)
-    print("STEP 1: SPECIALTY IDENTIFICATION")
-    print("=" * 50)
-    print(f"Identified specialty: {state.get('specialty', 'N/A')}")
-    
-    print("\n" + "=" * 50)
-    print("STEP 2: MATCHING SPECIALISTS")
-    print("=" * 50)
-    print(state.get('professional_list', 'No specialists found'))
-    
-    print("\n" + "=" * 50)
-    print("SYSTEM MESSAGE")
-    print("=" * 50)
-    print(state.get('message', 'N/A'))
-    
-    print("\n" + "=" * 50)
-    print("PROMPT TO USER")
-    print("=" * 50)
-    print(state.get('human_question', 'N/A'))
-    
-    # User selects a professional from the matched specialists
-    # Simulating user selecting "Ali" (Cardiology specialist)
-    print("\n" + "=" * 50)
-    print("STEP 3: USER SELECTS PROFESSIONAL")
-    print("=" * 50)
-    print("User selects: 'Ali'")
-    
-    app.update_state(thread_config, {
-        "professional_name": "Ali",
-        "professional_criteria": "Ali"
-    })
-    
-    # Continue to fetch_professionals -> get_current_next_week_slots
-    app.invoke(None, thread_config)
-    
-    state = app.get_state(thread_config).values
-    
-    print("\n" + "=" * 50)
-    print("STEP 4: AVAILABLE TIMESLOTS (Current & Next Week)")
-    print("=" * 50)
-    print(state.get('timeslots', 'No timeslots available'))
-    
-    # User decides to book an appointment
-    print("\n" + "=" * 50)
-    print("STEP 5: USER BOOKS APPOINTMENT")
-    print("=" * 50)
-    print("User selects: Monday at 09:00, Week 2 (Next Week)")
-    
-    app.update_state(thread_config, {
-        "user_action": "book",
-        "day_of_week": "Monday",
-        "start_time": "09:00",
-        "week_number": 2
-    })
-    
-    # Continue to book_appointment -> final_format
-    app.invoke(None, thread_config)
-    
-    state = app.get_state(thread_config).values
-    
-    print("\n" + "=" * 50)
-    print("STEP 6: BOOKING CONFIRMATION")
-    print("=" * 50)
-    print(state.get('message', 'No booking message'))
-    
-    print("\n" + "=" * 50)
-    print("STEP 7: FINAL FORMATTED RESPONSE")
-    print("=" * 50)
-    print(state.get('final_answer', 'No final answer'))
-    
-    print("\n" + "#" * 50)
-    print("TEST COMPLETED SUCCESSFULLY")
+    print("INTERACTIVE TEST CASE: Symptoms -> Specialty -> Book")
     print("#" * 50)
 
-    
+    thread_id = f"case_{int(time.time())}"
+    thread_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 20}
+
+    # 1. Initial User Input
+    query_input = input("Enter your symptoms (e.g., 'I have chest pain'): ")
+    client_name_input = input("Enter your name: ")
+
+    print(f"\n[System] Starting flow with query: {query_input}")
+
+    # Start execution - stops before 'node_classify'
+    app.invoke({
+        "query": query_input,
+        "client_name": client_name_input
+    }, thread_config)
+
+    # Resume to classify and find specialty - stops before 'node_find_professional'
+    print("[System] Analyzing symptoms...")
+    app.invoke(None, thread_config)
+
+    # Retrieve state to show found specialists
+    state = app.get_state(thread_config).values
+    print("\n" + "=" * 50)
+    print(f"SPECIALTY IDENTIFIED: {state.get('specialty', 'Unknown')}")
+    print("=" * 50)
+    print(state.get('message', ''))
+    print("-" * 20)
+    print(state.get('human_question', ''))
+
+    # 2. User selects professional
+    prof_choice = input("\nEnter professional name from list above: ")
+
+    app.update_state(thread_config, {
+        "professional_name": prof_choice,
+        "professional_criteria": prof_choice
+    })
+
+    # Resume - runs 'node_find_professional', stops before 'node_fetch_professionals'
+    app.invoke(None, thread_config)
+
+    # Resume - runs 'node_fetch_professionals', runs 'node_get_current_next_week_slots', stops AFTER 'node_get_current_next_week_slots'
+    print(f"\n[System] Fetching slots for {prof_choice}...")
+    app.invoke(None, thread_config)
+
+    # Retrieve state to show timeslots
+    state = app.get_state(thread_config).values
+    print("\n" + "=" * 50)
+    print("AVAILABLE TIMESLOTS")
+    print("=" * 50)
+    print(state.get('timeslots', 'No slots found'))
+
+    # 3. User books appointment
+    action = input("\nDo you want to book? (yes/no): ").lower()
+
+    if action in ["yes", "y", "book"]:
+        day = input("Enter Day (e.g., Monday): ")
+        time_str = input("Enter Time (e.g., 09:00): ")
+        week = input("Enter Week Number (1 or 2): ")
+
+        app.update_state(thread_config, {
+            "user_action": "book",
+            "day_of_week": day,
+            "start_time": time_str,
+            "week_number": int(week)
+        })
+
+        print("\n[System] Booking appointment...")
+        app.invoke(None, thread_config)
+
+        # Final result
+        state = app.get_state(thread_config).values
+        print("\n" + "=" * 50)
+        print("FINAL RESULT")
+        print("=" * 50)
+        print(state.get('final_answer', state.get('message')))
+
+    else:
+        print("Exiting...")
+print(APPOINTMENTS)
+
+# if __name__ == "__main__":
+#  print(book_appointment_slot(professional_name="ali", client_name="Malik", day_of_week="Monday", start_time="9:00", week_number=2))

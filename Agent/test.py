@@ -192,7 +192,7 @@ if user_input:
                     
                     response = f"**Available slots for Dr. {professional_name}:**\n\n```\n{timeslots}\n```\n\n"
                     response += "**To book, type:** `Day Time Week` (e.g., `Monday 09:00 2`)\n"
-                    response += "**To view another week, type:** `week 5` or just `5`"
+                    response += "**To view another week, type:** `week 5` or just `5` 1 is the current week"
                     
                     st.session_state.waiting_for = "booking"
                     add_message("assistant", response)

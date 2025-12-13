@@ -174,7 +174,7 @@ if user_input:
                 # Update state with professional selection
                 app.update_state(get_thread_config(), {
                     "professional_name": professional_name,
-                    "professional_criteria": professional_name
+                    # "professional_criteria": professional_name
                 })
                 
                 # INVOKE 1: Resume workflow

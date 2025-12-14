@@ -6,16 +6,12 @@ from RAG.RAG_steps.vector_db import get_db_collection
 
 
 
-st.title("Adding the data📊")
+st.title("Adding Data about Patients😷💉")
 
 with st.expander("Explanation about this page"):
     st.write(   """
-        After adding the documents, your documents go through the 4-step of RAG worflow: 
-    1. **Loading** : Extract text from various file formats (PDF, DOCX, TXT, etc.)
-    2. **Chunking** : Split content into manageable pieces with overlap
-    3. **Embedding** : Convert text to numerical vectors using AI models
-    4. **Storage** : Save vectors + metadata in ChromaDB for fast retrieval \n
-    (you see after each step that is finished :) )
+        here you can upload documents related to patients such as medical records, test results, prescriptions, etc.
+        The system will process these documents, extract relevant information, and store them in a vector database
              """)
 
 uploaded_files = st.file_uploader(

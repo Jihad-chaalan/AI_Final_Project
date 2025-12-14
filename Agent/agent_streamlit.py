@@ -334,12 +334,3 @@ if user_input:
     
     st.rerun()
 
-# Footer
-st.divider()
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.caption("🤖 LangGraph Multi-Agent")
-with col2:
-    st.caption("🧠 DeepSeek LLM")
-with col3:
-    st.caption(f"💾 {len(APPOINTMENTS)} bookings")

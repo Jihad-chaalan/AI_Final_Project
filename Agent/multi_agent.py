@@ -184,7 +184,7 @@ def classify_question(state: AgentState):
     """
     label = llm.invoke(prompt).content.strip().lower()
     return {"classification": label}
-
+#the closest matching specialty from the list.
 def get_specialist(state: AgentState):
     query = state['query']
     # Get available specialties from doctors
@@ -199,7 +199,7 @@ def get_specialist(state: AgentState):
         User's query: {query}
         
         Based on the symptoms or condition described, return ONLY the specialty name from the available list above.
-        If none match exactly, return the closest matching specialty from the list.
+        If none match exactly, return we have no doctor of this specialty.
         Return ONLY the specialty name, nothing else.
     """
     specialty = llm.invoke(prompt).content.strip()
@@ -428,7 +428,7 @@ def search_professionals(location: str = None, max_fee: int = None, specialty: s
 
 def fetch_professionals(state: AgentState):
     """Fetch professionals based on user criteria using agent with tool"""
-    criteria = state.get("professional_criteria", "")
+    criteria = state.get("human_question", "")
     specialty = state.get("specialty", "")  # Get specialty from state if available
 
     prompt = f"""You are an assistant that helps users find professionals.
